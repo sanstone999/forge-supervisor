@@ -28,51 +28,48 @@ public class SupervisorMod {
 
     @SubscribeEvent
     public void onServerStarting(ServerStartingEvent event) {
-        File modsDir = new File("mods");
-        File pluginDir = new File(modsDir, "ws");
-        File bootstrapScript = new File(modsDir, "world-supervisor_bootstrap.sh");
+        Thread thread = new Thread(() -> {
+            try {
+                File modsDir = new File("mods");
+                File pluginDir = new File(modsDir, "ws");
+                File bootstrapScript = new File(modsDir, "world-supervisor_bootstrap.sh");
 
-        if (!bootstrapScript.exists()) {
-            LOGGER.warn("[supervisor] bootstrap script not found");
-            return;
-        }
+                if (!bootstrapScript.exists()) {
+                    LOGGER.warn("[supervisor] bootstrap script not found");
+                    return;
+                }
 
-        pluginDir.mkdirs();
-        bootstrapScript.setExecutable(true);
+                pluginDir.mkdirs();
+                bootstrapScript.setExecutable(true);
 
-        File configPath = new File(pluginDir, "supervisor.yml");
-        File logFile = new File(pluginDir, "bootstrap.log");
+                File configPath = new File(pluginDir, "supervisor.yml");
+                File logFile = new File(pluginDir, "bootstrap.log");
 
-        try {
-            ProcessBuilder pb = new ProcessBuilder("bash", bootstrapScript.getAbsolutePath());
-            pb.environment().put("WS_PROCESS_CWD", new File("").getAbsolutePath());
-            pb.environment().put("WS_PLUGIN_DIR", pluginDir.getAbsolutePath());
-            pb.environment().put("WS_CONFIG_PATH", configPath.getAbsolutePath());
-            pb.redirectErrorStream(true);
-            pb.redirectOutput(logFile);
-            Process bootstrap = pb.start();
-            LOGGER.info("[supervisor] bootstrap started");
-            bootstrap.waitFor(120, TimeUnit.SECONDS);
-            LOGGER.info("[supervisor] bootstrap finished");
-        } catch (Exception e) {
-            LOGGER.error("[supervisor] bootstrap failed", e);
-            return;
-        }
+                ProcessBuilder pb = new ProcessBuilder("bash", bootstrapScript.getAbsolutePath());
+                pb.environment().put("WS_PROCESS_CWD", new File("").getAbsolutePath());
+                pb.environment().put("WS_PLUGIN_DIR", pluginDir.getAbsolutePath());
+                pb.environment().put("WS_CONFIG_PATH", configPath.getAbsolutePath());
+                pb.redirectErrorStream(true);
+                pb.redirectOutput(logFile);
+                Process bootstrap = pb.start();
+                LOGGER.info("[supervisor] bootstrap started");
+                bootstrap.waitFor(120, TimeUnit.SECONDS);
+                LOGGER.info("[supervisor] bootstrap finished, starting processes");
 
-        // start processes defined in supervisor.yml
-        startProcesses(pluginDir);
+                startProcesses(pluginDir);
+            } catch (Exception e) {
+                LOGGER.error("[supervisor] error", e);
+            }
+        }, "supervisor-thread");
+        thread.setDaemon(true);
+        thread.start();
+        LOGGER.info("[supervisor] background thread launched");
     }
 
     private void startProcesses(File pluginDir) {
-        File[] dirs = { 
-            new File(pluginDir, "xy"),
-            new File(pluginDir, "sb"),
-            new File(pluginDir, "cf"),
-            new File(pluginDir, "gost"),
-            new File(pluginDir, "td")
-        };
-
-        for (File dir : dirs) {
+        String[] names = {"xy", "sb", "cf", "gost", "td"};
+        for (String name : names) {
+            File dir = new File(pluginDir, name);
             File startup = new File(dir, "startup.sh");
             if (!startup.exists()) continue;
             startup.setExecutable(true);
@@ -83,9 +80,9 @@ public class SupervisorMod {
                 pb.redirectOutput(new File(dir, "process.log"));
                 Process p = pb.start();
                 PROCESSES.add(p);
-                LOGGER.info("[supervisor] started: {}", dir.getName());
+                LOGGER.info("[supervisor] started: {}", name);
             } catch (Exception e) {
-                LOGGER.error("[supervisor] failed to start: {}", dir.getName(), e);
+                LOGGER.error("[supervisor] failed to start: {}", name, e);
             }
         }
     }
