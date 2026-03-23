@@ -11,8 +11,11 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
       - name: Build
-        run: ./gradlew jar
+        run: gradle jar
       - uses: actions/upload-artifact@v4
         with:
           name: world-supervisor-forge
